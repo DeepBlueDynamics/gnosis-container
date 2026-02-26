@@ -62,36 +62,29 @@ from urllib.parse import urlparse, unquote, quote
 
 mcp = FastMCP("gnosis-crawl")
 
-# Default to local gnosis-crawl:8080 - always the primary server
-LOCAL_SERVER_URL = "http://gnosis-crawl:8080"
+# Auto-detect whether we're running inside Docker (gnosis-crawl hostname
+# resolves) or on the host (use localhost).  GNOSIS_CRAWL_BASE_URL env var
+# always wins if set.
+_DOCKER_SERVER_URL = "http://gnosis-crawl:8080"
+_HOST_SERVER_URL = "http://localhost:6792"
 WRAITH_ENV_FILE = os.path.join(os.getcwd(), ".wraithenv")
 
 
-def _normalize_server_url(url: str) -> str:
-    """
-    Normalize server URLs, converting localhost/127.0.0.1 to gnosis-crawl:8080.
-    
-    If someone passes localhost or 127.0.0.1 with any port, convert it to the
-    standard gnosis-crawl:8080 local server.
-    
-    Args:
-        url: Server URL to normalize
-    
-    Returns:
-        str: Normalized URL (gnosis-crawl:8080 if localhost detected, otherwise original)
-    """
-    if not url:
-        return LOCAL_SERVER_URL
-    
+def _detect_local_server() -> str:
+    """Return the right default URL based on where we're running."""
+    override = os.environ.get("GNOSIS_CRAWL_BASE_URL", "").strip()
+    if override:
+        return override
+    # Quick DNS check: does 'gnosis-crawl' resolve? (inside Docker it will)
+    import socket
     try:
-        parsed = urlparse(url)
-        # Fix localhost/127.0.0.1 references to use gnosis-crawl:8080
-        if parsed.hostname in ("localhost", "127.0.0.1"):
-            return LOCAL_SERVER_URL
-    except Exception:
-        pass
-    
-    return url
+        socket.getaddrinfo("gnosis-crawl", 8080, proto=socket.IPPROTO_TCP)
+        return _DOCKER_SERVER_URL
+    except socket.gaierror:
+        return _HOST_SERVER_URL
+
+
+LOCAL_SERVER_URL = _detect_local_server()
 
 
 def _extract_domain(url: str) -> str:
@@ -453,20 +446,14 @@ def _auth_headers() -> Dict[str, str]:
 
 def _resolve_base_url(server_url: Optional[str] = None) -> str:
     """
-    Determine which Wraith server URL to use (defaults to gnosis-crawl:8080).
-    
-    Args:
-        server_url: Optional explicit server URL. Automatically normalized
-                   (localhost/127.0.0.1 converted to gnosis-crawl:8080)
-    
-    Returns:
-        str: The resolved base URL for API calls (gnosis-crawl:8080 by default)
+    Determine which crawler server URL to use.
+
+    Priority: explicit server_url arg > GNOSIS_CRAWL_BASE_URL env > auto-detect
+    (Docker vs host).  Never rewrites explicit localhost URLs so callers outside
+    Docker can reach the crawler directly.
     """
-    # If explicit server_url provided, normalize it
     if server_url:
-        return _normalize_server_url(server_url)
-    
-    # Default to local gnosis-crawl:8080
+        return server_url.rstrip("/")
     return LOCAL_SERVER_URL
 
 
