@@ -65,7 +65,7 @@ mcp = FastMCP("gnosis-crawl")
 # Auto-detect whether we're running inside Docker (gnosis-crawl hostname
 # resolves) or on the host (use localhost).  GNOSIS_CRAWL_BASE_URL env var
 # always wins if set.
-_DOCKER_SERVER_URL = "http://gnosis-crawl:8080"
+_DOCKER_SERVER_URL = "http://gnosis-crawl:6792"
 _HOST_SERVER_URL = "http://localhost:6792"
 WRAITH_ENV_FILE = os.path.join(os.getcwd(), ".wraithenv")
 
@@ -78,7 +78,7 @@ def _detect_local_server() -> str:
     # Quick DNS check: does 'gnosis-crawl' resolve? (inside Docker it will)
     import socket
     try:
-        socket.getaddrinfo("gnosis-crawl", 8080, proto=socket.IPPROTO_TCP)
+        socket.getaddrinfo("gnosis-crawl", 6792, proto=socket.IPPROTO_TCP)
         return _DOCKER_SERVER_URL
     except socket.gaierror:
         return _HOST_SERVER_URL
